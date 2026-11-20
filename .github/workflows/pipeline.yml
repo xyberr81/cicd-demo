@@ -1,7 +1,9 @@
 name: Pipeline
 
-# PRs and pushes to main run only the check job.
-# Pushing a tag like v1.1.0 runs the full pipeline: check -> build -> release.
+# PR: check.
+# Push to main: check -> build. This also fills the Gradle cache that tag runs reuse,
+# since a tag run can only restore caches saved on itself or on the default branch.
+# Tag vX.Y.Z: check -> build -> release.
 on:
   pull_request:
   push:
@@ -26,13 +28,13 @@ jobs:
       - run: tool/check.sh
 
   build:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push'
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
@@ -64,25 +66,29 @@ jobs:
 
       - name: Build signed APK
         run: |
+          # Tag v1.2.0 -> 1.2.0. Main-branch builds are never released, so any name works.
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then NAME="${GITHUB_REF_NAME#v}"; else NAME="0.0.0"; fi
           flutter build apk --release --target-platform android-arm64 \
-            --build-name="${GITHUB_REF_NAME#v}" \
+            --build-name="$NAME" \
             --build-number="${{ github.run_number }}" \
             --dart-define=GITHUB_REPO="${{ github.repository }}"
-          mv build/app/outputs/flutter-apk/app-release.apk "cicd-demo-${GITHUB_REF_NAME}.apk"
+          mv build/app/outputs/flutter-apk/app-release.apk "cicd-demo-${GITHUB_REF_NAME//\//-}.apk"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: apk
           path: cicd-demo-*.apk
 
   release:
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v8
         with:
           name: apk
       - name: Publish GitHub Release
@@ -92,4 +98,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" cicd-demo-*.apk \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
-            --generate-notes
+            --notes "$(git log -1 --format=%s)"

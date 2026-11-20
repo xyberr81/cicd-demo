@@ -30,22 +30,54 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  late final AppLifecycleListener _lifecycle;
   String _version = '';
+  String _status = 'Checking for updates…';
+  bool _busy = false;
   double? _progress;
 
   @override
   void initState() {
     super.initState();
+    // Reopening the app from recents doesn't rerun initState, so check on resume too.
+    _lifecycle = AppLifecycleListener(onResume: _checkForUpdate);
     _checkForUpdate();
   }
 
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
   Future<void> _checkForUpdate() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _status = 'Checking for updates…';
+    });
+
     final info = await PackageInfo.fromPlatform();
-    setState(() => _version = '${info.version} (build ${info.buildNumber})');
+    final result = await checkForUpdate(info.version);
+    if (!mounted) return;
 
-    final release = await checkForUpdate(info.version);
-    if (release == null || !mounted) return;
+    setState(() {
+      _busy = false;
+      _version = '${info.version} (build ${info.buildNumber})';
+      _status = switch (result) {
+        UpdatesDisabled() => 'Update check off in local builds',
+        UpToDate() => 'Up to date',
+        UpdateAvailable(:final release) => '${release.version} available',
+        CheckFailed(:final reason) => reason,
+      };
+    });
 
+    if (result case UpdateAvailable(:final release)) {
+      await _offerUpdate(release);
+    }
+  }
+
+  Future<void> _offerUpdate(Release release) async {
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -67,15 +99,25 @@ class _HomePageState extends State<HomePage> {
     );
     if (accepted != true) return;
 
-    setState(() => _progress = 0);
+    setState(() {
+      _busy = true;
+      _progress = 0;
+    });
     try {
       await AppInstallerPlus().downloadAndInstallApk(
         downloadFileUrl: release.apkUrl,
         deleteOnError: true,
         onProgress: (p) => setState(() => _progress = p),
       );
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Download failed: $e');
     } finally {
-      if (mounted) setState(() => _progress = null);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _progress = null;
+        });
+      }
     }
   }
 
@@ -96,11 +138,18 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 16),
               Text('v$_version', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 32),
+              Text(_status, textAlign: TextAlign.center),
               if (_progress != null) ...[
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 LinearProgressIndicator(value: _progress),
                 Text('Downloading ${(_progress! * 100).round()}%'),
               ],
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: _busy ? null : _checkForUpdate,
+                child: const Text('Check for updates'),
+              ),
             ],
           ),
         ),

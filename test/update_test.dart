@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:cicd_demo/update.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -43,6 +47,52 @@ void main() {
 
     test('returns null without an APK', () {
       expect(releaseFromJson({'tag_name': 'v1.1.0', 'assets': []}), isNull);
+    });
+  });
+
+  group('checkForUpdate', () {
+    Future<UpdateCheck> run(http.Client client, {String current = '1.0.0'}) =>
+        checkForUpdate(current, repo: 'owner/demo', client: client);
+
+    final latest = jsonEncode({
+      'tag_name': 'v1.1.0',
+      'body': 'New headline',
+      'assets': [
+        {'name': 'app.apk', 'browser_download_url': 'https://x/app.apk'},
+      ],
+    });
+
+    test('newer release is offered', () async {
+      final result = await run(
+        MockClient((_) async => http.Response(latest, 200)),
+      );
+      expect(result, isA<UpdateAvailable>());
+      expect((result as UpdateAvailable).release.apkUrl, 'https://x/app.apk');
+    });
+
+    test('same version is up to date', () async {
+      final result = await run(
+        MockClient((_) async => http.Response(latest, 200)),
+        current: '1.1.0',
+      );
+      expect(result, isA<UpToDate>());
+    });
+
+    test('rate limit is reported, not swallowed', () async {
+      final result = await run(MockClient((_) async => http.Response('', 403)));
+      expect((result as CheckFailed).reason, contains('rate limit'));
+    });
+
+    test('network error is reported, not thrown', () async {
+      final result = await run(
+        MockClient((_) async => throw http.ClientException('offline')),
+      );
+      expect(result, isA<CheckFailed>());
+    });
+
+    test('no repo means disabled', () async {
+      final result = await checkForUpdate('1.0.0', repo: '');
+      expect(result, isA<UpdatesDisabled>());
     });
   });
 }

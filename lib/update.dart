@@ -50,18 +50,59 @@ Release? releaseFromJson(Map<String, dynamic> json) {
   );
 }
 
-/// Returns the latest release if it is newer than [currentVersion].
-Future<Release?> checkForUpdate(
+sealed class UpdateCheck {
+  const UpdateCheck();
+}
+
+/// Local build without `GITHUB_REPO`: there is nothing to check against.
+class UpdatesDisabled extends UpdateCheck {
+  const UpdatesDisabled();
+}
+
+class UpToDate extends UpdateCheck {
+  const UpToDate();
+}
+
+class UpdateAvailable extends UpdateCheck {
+  const UpdateAvailable(this.release);
+  final Release release;
+}
+
+class CheckFailed extends UpdateCheck {
+  const CheckFailed(this.reason);
+  final String reason;
+}
+
+/// Asks GitHub for the latest release and compares it with [currentVersion].
+/// Never throws: every failure comes back as [CheckFailed] so the UI can show it.
+Future<UpdateCheck> checkForUpdate(
   String currentVersion, {
+  String repo = githubRepo,
   http.Client? client,
 }) async {
-  if (githubRepo.isEmpty) return null;
-  final res = await (client ?? http.Client()).get(
-    Uri.https('api.github.com', '/repos/$githubRepo/releases/latest'),
-    headers: {'Accept': 'application/vnd.github+json'},
-  );
-  if (res.statusCode != 200) return null;
-  final release = releaseFromJson(jsonDecode(res.body) as Map<String, dynamic>);
-  if (release == null || !isNewer(release.version, currentVersion)) return null;
-  return release;
+  if (repo.isEmpty) return const UpdatesDisabled();
+  try {
+    final res = await (client ?? http.Client())
+        .get(
+          Uri.https('api.github.com', '/repos/$repo/releases/latest'),
+          headers: {'Accept': 'application/vnd.github+json'},
+        )
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode == 403 || res.statusCode == 429) {
+      return const CheckFailed('GitHub rate limit hit. Try mobile data.');
+    }
+    if (res.statusCode != 200) {
+      return CheckFailed('GitHub returned HTTP ${res.statusCode}.');
+    }
+    final release = releaseFromJson(
+      jsonDecode(res.body) as Map<String, dynamic>,
+    );
+    if (release == null) {
+      return const CheckFailed('Latest release has no APK attached.');
+    }
+    if (!isNewer(release.version, currentVersion)) return const UpToDate();
+    return UpdateAvailable(release);
+  } catch (e) {
+    return CheckFailed('Could not reach GitHub: $e');
+  }
 }
