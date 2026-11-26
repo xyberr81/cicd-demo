@@ -1,8 +1,10 @@
 import 'package:app_installer_plus/app_installer_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shorebird_code_push/shorebird_code_push.dart';
 
 import 'build_info.dart';
+import 'patch.dart';
 import 'update.dart';
 
 // Change this between releases to show the update arrived.
@@ -32,8 +34,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   late final AppLifecycleListener _lifecycle;
+  final _updater = ShorebirdUpdater();
   String _version = '';
   String _status = 'Checking for updates…';
+  PatchCheck _patch = const PatchesUnavailable();
   bool _busy = false;
   double? _progress;
 
@@ -59,7 +63,10 @@ class _HomePageState extends State<HomePage> {
     });
 
     final info = await PackageInfo.fromPlatform();
-    final result = await checkForUpdate(info.version);
+    final (result, patch) = await (
+      checkForUpdate(info.version),
+      checkForPatch(_updater),
+    ).wait;
     if (!mounted) return;
 
     setState(() {
@@ -71,6 +78,7 @@ class _HomePageState extends State<HomePage> {
         UpdateAvailable(:final release) => '${release.version} available',
         CheckFailed(:final reason) => reason,
       };
+      _patch = patch;
     });
 
     if (result case UpdateAvailable(:final release)) {
@@ -125,6 +133,15 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final (runningPatch, patchStatus) = switch (_patch) {
+      PatchesUnavailable() => (null, null),
+      PatchCurrent(:final patch) => (patch, null),
+      PatchReady(:final running, :final next) => (
+        running,
+        'Patch $next downloaded. Close and reopen the app.',
+      ),
+      PatchFailed(:final reason) => (null, reason),
+    };
     return Scaffold(
       body: Center(
         child: Padding(
@@ -140,9 +157,16 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 16),
               Text('v$_version', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
-              Text(buildLabel(), style: theme.textTheme.bodySmall),
+              Text(
+                buildLabel(patch: runningPatch),
+                style: theme.textTheme.bodySmall,
+              ),
               const SizedBox(height: 32),
               Text(_status, textAlign: TextAlign.center),
+              if (patchStatus case final status?) ...[
+                const SizedBox(height: 8),
+                Text(status, textAlign: TextAlign.center),
+              ],
               if (_progress != null) ...[
                 const SizedBox(height: 16),
                 LinearProgressIndicator(value: _progress),
