@@ -18,6 +18,9 @@ release, with no Play Store involved.
   the Actions run number, so it always goes up.
 - CI passes the repo name into the app with `--dart-define=GITHUB_REPO`. Local
   builds don't set it, so they never check for updates.
+- CI also passes `APP_ENV` (`production` for tags, `staging` for `main`) and
+  `COMMIT_SHA`. The app shows both under the version, so you can match the
+  installed build to its commit.
 - On launch, on every return to the app, and from the "Check for updates"
   button, the app calls `GET /repos/{repo}/releases/latest`. If that tag is
   newer, it offers to download the APK and hands it to Android's installer.

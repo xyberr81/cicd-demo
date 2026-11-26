@@ -2,6 +2,7 @@ import 'package:app_installer_plus/app_installer_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'build_info.dart';
 import 'update.dart';
 
 // Change this between releases to show the update arrived.
@@ -138,6 +139,8 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 16),
               Text('v$_version', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(buildLabel(), style: theme.textTheme.bodySmall),
               const SizedBox(height: 32),
               Text(_status, textAlign: TextAlign.center),
               if (_progress != null) ...[

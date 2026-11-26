@@ -67,11 +67,17 @@ jobs:
       - name: Build signed APK
         run: |
           # Tag v1.2.0 -> 1.2.0. Main-branch builds are never released, so any name works.
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then NAME="${GITHUB_REF_NAME#v}"; else NAME="0.0.0"; fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            NAME="${GITHUB_REF_NAME#v}"; APP_ENV=production
+          else
+            NAME="0.0.0"; APP_ENV=staging
+          fi
           flutter build apk --release --target-platform android-arm64 \
             --build-name="$NAME" \
             --build-number="${{ github.run_number }}" \
-            --dart-define=GITHUB_REPO="${{ github.repository }}"
+            --dart-define=GITHUB_REPO="${{ github.repository }}" \
+            --dart-define=APP_ENV="$APP_ENV" \
+            --dart-define=COMMIT_SHA="$GITHUB_SHA"
           mv build/app/outputs/flutter-apk/app-release.apk "cicd-demo-${GITHUB_REF_NAME//\//-}.apk"
 
       - uses: actions/upload-artifact@v7
