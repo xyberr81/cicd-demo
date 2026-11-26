@@ -8,7 +8,7 @@ import 'patch.dart';
 import 'update.dart';
 
 // Change this between releases to show the update arrived.
-const headline = 'Hello, seminar!';
+const headline = 'Xin chào, seminar!';
 
 void main() => runApp(const DemoApp());
 
@@ -71,7 +71,7 @@ class _HomePageState extends State<HomePage> {
 
     setState(() {
       _busy = false;
-      _version = '${info.version} (build ${info.buildNumber})';
+      _version = '${info.buildNumber} (build ${info.version})';
       _status = switch (result) {
         UpdatesDisabled() => 'Update check off in local builds',
         UpToDate() => 'Up to date',
