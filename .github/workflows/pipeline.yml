@@ -9,7 +9,7 @@ on:
   pull_request:
   push:
     branches: [main]
-    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-patch.[0-9]+']
+    tags: ['v*.*.*']
 
 concurrency:
   group: pipeline-${{ github.ref }}
