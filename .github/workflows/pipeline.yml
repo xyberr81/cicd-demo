@@ -46,10 +46,11 @@ jobs:
           flutter-version: 3.47.x
           cache: true
 
-      - uses: shorebird/setup-shorebird@v1
+      - uses: shorebirdtech/setup-shorebird@v1
         if: github.ref_type == 'tag'
         with:
           cache: true
+          flutter-version: 3.47.9
 
       - name: Restore signing key
         env: &signing
@@ -119,9 +120,10 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - uses: shorebird/setup-shorebird@v1
+      - uses: shorebirdtech/setup-shorebird@v1
         with:
           cache: true
+          flutter-version: 3.47.9
 
       - name: Restore signing key
         env: *signing
