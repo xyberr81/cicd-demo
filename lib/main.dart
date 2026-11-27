@@ -71,7 +71,7 @@ class _HomePageState extends State<HomePage> {
 
     setState(() {
       _busy = false;
-      _version = '${info.buildNumber} (build ${info.version})';
+      _version = '${info.version} (build ${info.buildNumber})';
       _status = switch (result) {
         UpdatesDisabled() => 'Update check off in local builds',
         UpToDate() => 'Up to date',
